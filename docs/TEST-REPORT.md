@@ -4,6 +4,7 @@
 
 - 26 testów automatycznych: atrapa czatu T/tekst/Enter, pusty tekst, prefiksy komend, długość, duplikaty, brak fokusu, utrata fokusu w trakcie wpisywania, anulowanie, niepotwierdzone/już otwarte pole; zapis/odczyt konfiguracji; cisza i krótki sygnał; cykl życia strumienia mikrofonowego na atrapie, odrzucenie przepełnienia; PTT, release, autorepeat, toggle i nakładające się źródła wejścia; wzorce wizualne; parametry modelu i awaryjne przejście na CPU.
 - Cykl życia GUI na Windows 11: utworzenie, obsługa zdarzeń, zamknięcie; bez fizycznego nagrywania i wysyłania klawiszy.
+- Zbudowany EXE: test GUI oraz prawdziwe dekodowanie próbki syntetycznej w obu wariantach z modelem small na CPU; kod zakończenia 0. Modele pozostają zewnętrzne. Sprawdzono brak lokalnej nazwy konta w plikach paczki; usunięto ścieżkę kompilacji z pomocniczego bytecode biblioteki. Build.cmd powtarza tę sanitację.
 - Diagnostyka potwierdziła dostępność bibliotek i enumerację urządzeń; nie potwierdza działania konkretnego sprzętu.
 - Pobranie i rzeczywiste dekodowanie small, medium, large-v3; oba warianty, lokalnie na CPU int8. Syntetyczny głos pl-PL z Windows System.Speech, zdanie: „Przepraszam, nie zauważyłem cię po wewnętrznej. Mój błąd.” Audio nie jest publikowane.
 
