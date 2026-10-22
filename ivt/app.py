@@ -9,7 +9,7 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 from collections import deque
 from .config import Config, DATA
-from .audio import Recorder, usable, RATE
+from .audio import Recorder, usable, RATE, microphones
 from .engine import Engine
 from .chat import Sender
 from .windows import WindowsChat
@@ -44,16 +44,20 @@ class App:
         self.status = tk.StringVar(value='Pobierz lub załaduj model, następnie wykonaj testy')
         ttk.Label(self.frame, textvariable=self.status, wraplength=740).pack(anchor='w', pady=8)
         self.vars = {}
-        import sounddevice as sd
-        microphones = [d['name'] for d in sd.query_devices() if d['max_input_channels']]
-        for key, label, choices in [
-            ('microphone','Mikrofon', microphones), ('model','Model', ['small','medium','large-v3']),
+        self.mics = microphones(self.config.microphone_api)
+        for key, label, choices in [ ('model','Model', ['small','medium','large-v3']),
             ('device','Obliczenia', ['auto','cuda','cpu']), ('engine','Silnik', ['direct','two-stage','polish']),
             ('mode','Przycisk', ['ptt','toggle']), ('hotkey','Skrót / SimHub', ['f8','f9','f10','f11','f12'])]:
             row = ttk.Frame(self.frame); row.pack(fill='x', pady=2)
             ttk.Label(row, text=label, width=23).pack(side='left')
             var = tk.StringVar(value=str(getattr(self.config,key))); self.vars[key] = var
             ttk.Combobox(row, textvariable=var, values=choices, state='readonly').pack(side='left', fill='x', expand=True)
+        row = ttk.Frame(self.frame); row.pack(fill='x', pady=2)
+        ttk.Label(row, text='Mikrofon (MME)', width=23).pack(side='left')
+        self.mic_box = ttk.Combobox(row, values=['Domyślny systemowy']+[m.label for m in self.mics], state='readonly')
+        self.mic_box.pack(side='left', fill='x', expand=True)
+        names = [m.name for m in self.mics]
+        self.mic_box.current(names.index(self.config.microphone)+1 if self.config.microphone in names else 0)
         self.devices = ttk.Combobox(self.frame, state='readonly')
         self.devices.pack(fill='x', pady=5)
         self.wheel_label = tk.StringVar(value=f'Przycisk: {self.config.joystick} / {self.config.button}')
@@ -110,6 +114,9 @@ class App:
             setattr(new,key,type(old)(var.get()))
         if not (0.1<=new.gain<=10 and 0.0001<=new.silence<=0.5 and 0.05<=new.open_delay<=3 and 0.01<=new.send_delay<=3 and 10<=new.max_chars<=500):
             raise ValueError('Nieprawidłowe zakresy ustawień')
+        choice=self.mic_box.current()
+        new.microphone=self.mics[choice-1].name if choice>0 else ''
+        new.microphone_api=self.mics[choice-1].hostapi if choice>0 else 'MME'
         new.roi=self.roi.get(); new.auto_send=self.auto.get(); new.beeps=self.beeps.get()
         if new.roi != self.config.roi:
             for state in ('open','closed'):

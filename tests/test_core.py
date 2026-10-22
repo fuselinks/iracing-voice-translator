@@ -72,5 +72,20 @@ class Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             cfg=Config(button=4,joystick='test-device',mode='toggle')
             cfg.save(Path(folder));self.assertEqual(Config.load(Path(folder)),cfg)
+    def test_damaged_settings_give_defaults(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder=Path(folder)
+            (folder/'settings.json').write_bytes(b'\xff\xfe broken')
+            with self.assertLogs('ivt.config','WARNING'):self.assertEqual(Config.load(folder),Config())
+            for payload in ['{"model": "small",','[1,2]','{"gain": NaN']:
+                (folder/'settings.json').write_text(payload,encoding='utf-8')
+                with self.assertLogs('ivt.config','WARNING'):self.assertEqual(Config.load(folder),Config())
+                self.assertTrue((folder/'settings.json.bad').exists());self.assertIsNotNone(Config.load_problem)
+    def test_invalid_field_types_fall_back_per_field(self):
+        with tempfile.TemporaryDirectory() as folder:
+            folder=Path(folder)
+            (folder/'settings.json').write_text('{"model":"small","gain":"loud","button":true,"auto_send":1,"unknown":5}',encoding='utf-8')
+            with self.assertLogs('ivt.config','WARNING'):cfg=Config.load(folder)
+            self.assertEqual((cfg.model,cfg.gain,cfg.button,cfg.auto_send),('small',1.0,-1,False))
 
 if __name__=='__main__':unittest.main()
