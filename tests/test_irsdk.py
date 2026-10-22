@@ -4,7 +4,7 @@ import uuid
 from ctypes import wintypes
 from unittest.mock import patch
 from ivt import irsdk
-from ivt.irsdk import IRacingSDK, make_long
+from ivt.irsdk import IRacingSDK, make_long, session_names
 
 kernel32=ctypes.WinDLL('kernel32',use_last_error=True)
 kernel32.CreateFileMappingW.argtypes=[wintypes.HANDLE,ctypes.c_void_p,wintypes.DWORD,wintypes.DWORD,wintypes.DWORD,wintypes.LPCWSTR]
@@ -12,15 +12,29 @@ kernel32.CreateFileMappingW.restype=wintypes.HANDLE
 INVALID_HANDLE=wintypes.HANDLE(-1).value
 
 class SdkTests(unittest.TestCase):
-    def mapping(self,status):
+    def mapping(self,status,yaml=b''):
         # A private mapping with a unique name; never the real iRacing name.
         name='Local\\IVT-test-'+uuid.uuid4().hex
-        handle=kernel32.CreateFileMappingW(INVALID_HANDLE,None,0x04,0,64,name)
+        handle=kernel32.CreateFileMappingW(INVALID_HANDLE,None,0x04,0,4096,name)
         self.assertTrue(handle);self.addCleanup(irsdk.kernel32.CloseHandle,handle)
-        view=irsdk.kernel32.MapViewOfFile(handle,0x0002,0,0,8)
+        view=irsdk.kernel32.MapViewOfFile(handle,0x0002,0,0,4096)
         ctypes.c_int.from_address(view+4).value=status
+        if yaml:
+            ctypes.c_int.from_address(view+16).value=len(yaml)+16
+            ctypes.c_int.from_address(view+20).value=112
+            ctypes.memmove(view+112,yaml,len(yaml))
         irsdk.kernel32.UnmapViewOfFile(view)
         return name
+    def test_session_names(self):
+        yaml=('---\nWeekendInfo:\n TrackName: spa 2024 up\n TrackDisplayName: Circuit de Spa-Francorchamps\n'
+              ' TrackDisplayShortName: Spa\nDriverInfo:\n Drivers:\n - CarIdx: 0\n   UserName: Pace Car\n   TeamName: Pace Car\n'
+              ' - CarIdx: 1\n   UserName: Igor Wójcik\n   TeamName: Igor Wójcik\n - CarIdx: 2\n   UserName: Lars Eriksson\n'
+              '   TeamName: Team Nordic\n...\n').encode('cp1252')
+        with patch('ivt.irsdk.MEMMAP_NAME',self.mapping(1,yaml)):
+            self.assertEqual(IRacingSDK().session_names(),['Circuit de Spa-Francorchamps','Spa','Igor Wójcik','Lars Eriksson','Team Nordic'])
+        with patch('ivt.irsdk.MEMMAP_NAME',self.mapping(0,yaml)):
+            self.assertEqual(IRacingSDK().session_names(),[])
+        self.assertEqual(session_names(''),[])
     def test_connected_bit(self):
         for status,expected in [(1,True),(3,True),(0,False),(2,False)]:
             with patch('ivt.irsdk.MEMMAP_NAME',self.mapping(status)):

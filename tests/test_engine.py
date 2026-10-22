@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from ivt.config import Config
 import tempfile
 from pathlib import Path
-from ivt.engine import Engine, is_hallucination, model_folder, PROMPT_TRANSLATE, PROMPT_TRANSCRIBE
+from ivt.engine import Engine, is_hallucination, model_folder, keep_segment, build_prompt, PROMPT_TRANSLATE, PROMPT_TRANSCRIBE, MAX_NAMES_CHARS
 
 class EngineTests(unittest.TestCase):
     def segment(self,text='Sorry, my mistake.'):
@@ -31,12 +31,18 @@ class EngineTests(unittest.TestCase):
         for text in ['Thank you for watching!','Thanks for watching.','Subtitles by the Amara.org community','amara.org',
                      'Napisy wykonał: Jan','Napisy stworzone przez społeczność','Dziękuję za uwagę.','Dziękuję za obejrzenie!',
                      'Thank you for your attention.','you','You.','Bye.','bye bye','Thank you.',' ... ','',
-                     'Please subscribe','www.example.com','Apex, braking point, blue flags.','pit entry, inside, outside, rejoin']:
+                     'Please subscribe','www.example.com','Dziękuje za oglądanie.',
+                     # decoding loop observed on the silent A50 recording with VAD disabled
+                     'iRacing, apex, braking point, pit entry, inside, outside, rejoin, pit entry, inside, outside, rejoin, pit entry, pit entry, pit entry, pit entry']:
             self.assertTrue(is_hallucination(text,PROMPT_TRANSLATE),text)
+        self.assertTrue(is_hallucination('Wewnętrzna, zewnętrzna, hamowanie, zakręt, niebieskie flagi.',PROMPT_TRANSCRIBE))
+        prompt=build_prompt('translate',['Lars Eriksson','Tomasz Wrona','Eau Rouge'])
+        self.assertTrue(is_hallucination('Lars Eriksson, Tomasz Wrona, Eau Rouge.',prompt))
     def test_real_speech_kept(self):
         for text in ['Sorry, I did not see you on the inside, my mistake.','Good race, thanks!','No.','Sorry!',
                      'Blue flags, I will let you pass on the straight.','Thank you for the clean race.',
-                     "Don't brake so early before turn two.",'Nie hamuj tak wcześnie.','Dobry wyścig, dzięki.','Mój błąd.','Blue flags, inside.']:
+                     "Don't brake so early before turn two.",'Nie hamuj tak wcześnie.','Dobry wyścig, dzięki.','Mój błąd.','Blue flags, inside.',
+                     'Niebieskie flagi, puszczę cię.','Uważaj, wracam na tor po wyjeździe.','Sorry Lars, my mistake at Eau Rouge.']:
             self.assertFalse(is_hallucination(text,PROMPT_TRANSLATE),text)
             self.assertFalse(is_hallucination(text,PROMPT_TRANSCRIBE),text)
     def test_hallucinated_segment_removed_real_kept(self):
@@ -45,6 +51,23 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(engine.process('local.wav')[1],'Sorry, my mistake.')
         engine.model.transcribe.return_value=([self.segment('Subtitles by the Amara.org community')],None)
         self.assertEqual(engine.process('local.wav')[1],'')
+    def test_short_real_word_kept(self):
+        # Values measured for "Sorry!" (large-v3, transcribe) and for silence ("Dzień dobry.", VAD off).
+        self.assertTrue(keep_segment(SimpleNamespace(no_speech_prob=0.01,avg_logprob=-1.03)))
+        self.assertTrue(keep_segment(SimpleNamespace(no_speech_prob=0.19,avg_logprob=-0.82)))
+        self.assertFalse(keep_segment(SimpleNamespace(no_speech_prob=0.58,avg_logprob=-1.22)))
+        self.assertFalse(keep_segment(SimpleNamespace(no_speech_prob=0.05,avg_logprob=-1.5)))
+    def test_prompt_with_names(self):
+        self.assertEqual(build_prompt('translate'),PROMPT_TRANSLATE)
+        self.assertEqual(build_prompt('transcribe',[' ','']),PROMPT_TRANSCRIBE)
+        self.assertEqual(build_prompt('translate',['Eau Rouge',' Raidillon','Eau Rouge']),'Names: Eau Rouge, Raidillon. '+PROMPT_TRANSLATE)
+        self.assertTrue(build_prompt('transcribe',['Kowalski']).startswith('Nazwy: Kowalski. '))
+        long=build_prompt('translate',[f'Driver Number{i}' for i in range(100)])
+        self.assertTrue(long.endswith(PROMPT_TRANSLATE));self.assertLessEqual(len(long),MAX_NAMES_CHARS+len(PROMPT_TRANSLATE)+12)
+    def test_names_passed_to_model(self):
+        engine=Engine(Config());engine.model=Mock()
+        engine.model.transcribe.return_value=([self.segment()],None);engine.process('local.wav',['Eau Rouge'])
+        self.assertIn('Eau Rouge',engine.model.transcribe.call_args.kwargs['initial_prompt'])
     def test_model_folder(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'small';fetched=[]

@@ -9,8 +9,12 @@ from .config import DATA
 from . import cuda
 
 log = logging.getLogger(__name__)
-PROMPT_TRANSLATE = 'iRacing, apex, braking point, blue flags, pit entry, inside, outside, rejoin, track limits.'
-PROMPT_TRANSCRIBE = 'Rozmowa kierowców w wyścigu iRacing: wewnętrzna, zewnętrzna, hamowanie, zakręt, niebieskie flagi, pit, prosta, okrążenie.'
+# Measured on real recordings (docs/TEST-REPORT.md): a Polish term list helps transcription without leaking into the
+# output, while an English term list or example sentence for `translate` was copied verbatim into results.
+PROMPT_TRANSLATE = 'Race chat in iRacing.'
+PROMPT_TRANSCRIBE = ('Czat kierowców w wyścigu iRacing: wewnętrzna, zewnętrzna, hamowanie, zakręt, niebieskie flagi, '
+                     'puszczę cię, wracam na tor, pit, prosta, okrążenie.')
+MAX_NAMES_CHARS = 500  # Whisper keeps only ~220 prompt tokens; names go first so the base prompt survives
 # Typical Whisper output for silence/noise (YouTube subtitle credits and sign-offs), Polish and English.
 HALLUCINATION_PATTERNS = re.compile('|'.join([
     r'thanks? (you )?for watching', r'thank you for (your )?(attention|listening|viewing)', r'(please )?(like and )?subscribe',
@@ -24,14 +28,36 @@ HALLUCINATION_EXACT = {'you', 'bye', 'bye bye', 'thank you', 'thank you very muc
 def words(text):
     return re.sub(r"[^\w' ]+", ' ', text.lower()).split()
 
+def build_prompt(task, names=()):
+    base = PROMPT_TRANSLATE if task == 'translate' else PROMPT_TRANSCRIBE
+    listed = ''
+    for name in dict.fromkeys(n.strip() for n in names if n.strip()):
+        if len(listed) + len(name) + 2 > MAX_NAMES_CHARS:
+            break
+        listed += (', ' if listed else '') + name
+    if not listed:
+        return base
+    return ('Names: ' if task == 'translate' else 'Nazwy: ') + listed + '. ' + base
+
 def is_hallucination(text, prompt=''):
-    normalized = ' '.join(words(text))
+    tokens = words(text)
+    normalized = ' '.join(tokens)
     if not normalized:
         return True
     if HALLUCINATION_PATTERNS.search(text) or normalized in HALLUCINATION_EXACT:
         return True
-    # The decoder sometimes echoes a chunk of the initial prompt when it hears nothing.
-    return len(normalized.split()) >= 4 and normalized in ' '.join(words(prompt))
+    if len(tokens) >= 12 and len(set(tokens)) / len(tokens) < 0.5:
+        return True  # decoding loop ("pit entry, pit entry, pit entry, ...")
+    # Echo of the initial prompt when nothing was said: mostly prompt vocabulary.
+    vocabulary = set(words(prompt))
+    return len(tokens) >= 6 and sum(t in vocabulary for t in tokens) >= 0.9 * len(tokens)
+
+def keep_segment(segment):
+    # Whisper's own silence rule needs both a high no-speech probability and a low log-probability;
+    # short real words ("Sorry!") can have avg_logprob around -1.0, so -1.0 alone is not used as a cut-off.
+    if segment.no_speech_prob > 0.9 or segment.avg_logprob < -1.3:
+        return False
+    return not (segment.no_speech_prob > 0.5 and segment.avg_logprob < -0.8)
 
 def model_folder(target, download, fetch, legacy):
     """Plain folder download (no symlinks: Windows without Developer Mode refuses them, WinError 1314)."""
@@ -57,6 +83,7 @@ class Engine:
         self.translator = None
         self.actual_device = ''
         self.warning = ''
+        self.last_raw = ''
 
     def _whisper(self, device, path):
         from faster_whisper import WhisperModel
@@ -106,15 +133,16 @@ class Engine:
             self.tokenizer = MarianTokenizer.from_pretrained(path)
             self.translator = MarianMTModel.from_pretrained(path).eval()
 
-    def process(self, audio):
+    def process(self, audio, names=()):
         if self.model is None:
             raise RuntimeError('Najpierw załaduj model')
         start = time.perf_counter()
         task = 'translate' if self.config.engine == 'direct' else 'transcribe'
-        prompt = PROMPT_TRANSLATE if task == 'translate' else PROMPT_TRANSCRIBE
+        prompt = build_prompt(task, names)
         segments, _ = self.model.transcribe(audio, language='pl', task=task, beam_size=3, vad_filter=True,
             condition_on_previous_text=False, temperature=0, initial_prompt=prompt)
-        kept = [s.text.strip() for s in segments if s.no_speech_prob < 0.6 and s.avg_logprob > -1.0]
+        kept = [s.text.strip() for s in segments if keep_segment(s)]
+        self.last_raw = ' '.join(kept)
         kept = [t for t in kept if not is_hallucination(t, prompt)]
         text = ' '.join(kept).strip()
         if text and is_hallucination(text, prompt):
