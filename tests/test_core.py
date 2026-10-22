@@ -13,6 +13,7 @@ class FakeChat:
         self.focus=1;self.connected=True;self.open=False;self.buffer='';self.messages=[];self.events=[];self.lose_after=None
     def target(self):return self.focus
     def sdk_connected(self):return self.connected
+    def prepare(self,text,window):return list(text)
     def begin_chat(self):self.events.append('begin');self.open=True
     def cancel_chat(self):self.events.append('cancel');self.open=False;self.buffer=''
     def enter(self):
@@ -76,8 +77,23 @@ class Tests(unittest.TestCase):
     def test_commands(self):
         for text in ['/12 hello','#clear','!yellow','@mute','$']:
             with self.assertRaises(ValueError):clean_message(text,180)
-    def test_length(self):
-        with self.assertRaises(ValueError):clean_message('a'*181,180)
+        with self.assertRaises(ValueError):clean_message('Hello there. /kick me',12)
+    def test_long_message_split_and_sent_in_parts(self):
+        text='Sorry about that. I did not see you on the inside. My mistake, I will wait for you.'
+        self.cfg.max_chars=40
+        self.sender.send('one',text,self.cancel)
+        self.assertEqual(self.chat.messages,['Sorry about that.','I did not see you on the inside.','My mistake, I will wait for you.'])
+        self.assertEqual(self.chat.events,['cancel','begin','enter']*3)
+    def test_too_long_even_after_split(self):
+        with self.assertRaises(ValueError):clean_message('word '*200,180)
+    def test_unicode_normalized_before_typing(self):
+        self.sender.send('one','„Mój błąd” — sorry… it’s ok',self.cancel)
+        self.assertEqual(self.chat.messages,['"Moj blad" - sorry... it\'s ok'])
+    def test_unmappable_character_rejected_before_chat_opens(self):
+        def prepare(text,window):raise ValueError('not in layout')
+        self.chat.prepare=prepare
+        with self.assertRaises(ValueError):self.sender.send('one','Hello',self.cancel)
+        self.assertFalse(self.chat.events)
     def test_silence(self):self.assertFalse(usable(np.zeros(RATE,dtype=np.float32),0.008))
     def test_short_noise(self):self.assertFalse(usable(np.ones(100,dtype=np.float32),0.008))
     def test_signal(self):self.assertTrue(usable(np.ones(RATE,dtype=np.float32)*0.1,0.008))

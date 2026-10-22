@@ -2,22 +2,22 @@
 import logging
 import threading
 import time
-import re
+from .keyboard import normalize_ascii, split_message
 
 log = logging.getLogger(__name__)
 
 class Cancelled(RuntimeError):
     pass
 
-def clean_message(text, limit):
-    text = re.sub(r'\s+', ' ', text).strip()
+def clean_message(text, limit, max_parts=3):
+    """ASCII text split into at most `max_parts` chat messages, none starting with a game command prefix."""
+    text = normalize_ascii(text)
     if not text:
         raise ValueError('Pusta wiadomość')
-    if text[0] in '/#!@$':
+    parts = split_message(text, limit, max_parts)
+    if any(part[0] in '/#!@$' for part in parts):
         raise ValueError('Rozpoznano prefiks komendy gry — wysyłanie anulowane')
-    if len(text) > limit:
-        raise ValueError('Wiadomość za długa — skróć wypowiedź')
-    return text
+    return parts
 
 class Sender:
     """Focus + SDK check → Cancel → BeginChat → pause → text → pause → focus check → Enter.
@@ -30,7 +30,7 @@ class Sender:
         self.attempted = set()
 
     def send(self, identity, text, cancel):
-        text = clean_message(text, self.config.max_chars)
+        parts = clean_message(text, self.config.max_chars)
         if not self.lock.acquire(False):
             raise Cancelled('Wysyłanie jest już w toku')
         started = time.perf_counter()
@@ -52,19 +52,24 @@ class Sender:
             check()
             if not self.io.sdk_connected():
                 raise Cancelled('iRacing SDK nie jest połączone — uruchom sesję w symulatorze')
+            # Every character is mapped before the chat opens, so a bad character cannot leave it half-typed.
+            plans = [self.io.prepare(part, window) for part in parts]
             self.attempted.add(identity)
             try:
-                self.io.cancel_chat()
-                pause(0.05)
-                self.io.begin_chat()
-                pause(self.config.open_delay)
-                for char in text:
+                for number, keys in enumerate(plans):
+                    if number:
+                        pause(self.config.open_delay)
+                    self.io.cancel_chat()
+                    pause(0.05)
+                    self.io.begin_chat()
+                    pause(self.config.open_delay)
+                    for key in keys:
+                        check()
+                        self.io.character(key)
+                        pause(self.config.char_delay)
+                    pause(self.config.send_delay)
                     check()
-                    self.io.character(char)
-                    pause(self.config.char_delay)
-                pause(self.config.send_delay)
-                check()
-                self.io.enter()
+                    self.io.enter()
             except BaseException:
                 try:
                     self.io.cancel_chat()

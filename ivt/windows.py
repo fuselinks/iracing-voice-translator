@@ -1,7 +1,7 @@
 import ctypes
 from ctypes import wintypes
 import psutil
-from pynput.keyboard import Controller, Key
+from . import keyboard
 from .irsdk import IRacingSDK
 
 SIM_PROCESSES = {'iracingsim64dx11.exe'}
@@ -15,7 +15,6 @@ class WindowsChat:
     def __init__(self, config):
         self.config = config
         self.sdk = IRacingSDK()
-        self.keyboard = Controller()
 
     def target(self):
         """Foreground window handle when it belongs to the iRacing simulator, else None."""
@@ -38,9 +37,11 @@ class WindowsChat:
     def cancel_chat(self):
         self.sdk.cancel_chat()
 
-    def character(self, char):
-        self.keyboard.type(char)
+    def prepare(self, text, window):
+        return keyboard.plan(text, window)
+
+    def character(self, keys):
+        keyboard.press(keys)
 
     def enter(self):
-        self.keyboard.press(Key.enter)
-        self.keyboard.release(Key.enter)
+        keyboard.enter()
