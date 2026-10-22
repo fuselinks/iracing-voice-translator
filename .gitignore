@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+build/
+dist/
+*.spec
+.env*
+*.wav
+*.mp3
+*.flac
+*.log
+*.png
+*.json
+models/
+private/
+*.zip

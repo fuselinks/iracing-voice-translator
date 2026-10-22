@@ -1,0 +1,1 @@
+"""Local iRacing voice translator."""

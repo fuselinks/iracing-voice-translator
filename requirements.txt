@@ -1,0 +1,8 @@
+faster-whisper>=1.2,<2
+sounddevice>=0.5,<1
+numpy>=2,<3
+pygame-ce>=2.5,<3
+pynput>=1.8,<2
+Pillow>=11,<13
+pystray>=0.19,<1
+psutil>=7,<8
