@@ -1,16 +1,27 @@
-# Odbiór na docelowym komputerze
+# Test w iRacing — sesja treningowa (ok. 20 min)
 
-Wszystkie poniższe punkty pozostają do wykonania na sprzęcie użytkownika. Wymagane zakończenie każdego punktu przed uznaniem projektu za odebrany.
+Do zrobienia razem, zanim uznamy czat za działający. Wszystko poniżej było dotąd sprawdzone tylko poza grą.
 
-1. W trybie podglądu sprawdź krótkie polskie zdania; sprawdź „nie”, „dwa okrążenia”, nazwiska, Spa, pit entry, inside/outside, blue flags, rejoin. Nie oceniaj tylko płynności angielskiego — porównuj znaczenie.
-2. Nagraj te same próbki dla small/medium/large-v3, wariantu A/B; benchmark z rozgrzewką. Zapis prywatnie: jakość, mediana/p95 czasu, VRAM i FPS z gry. Sprawdź CPU osobno. Nie dodawaj nagrań ani tekstów do Git.
-3. Wybierz mikrofon i urządzenie, przypisz przycisk. Przy aktywnej grze sprawdź początek po naciśnięciu i koniec po puszczeniu. Sprawdź toggle i F9 / SimHub, powtarzanie klawisza, jednoczesne wejścia i odłączenie urządzenia.
-4. Naciśnij bez mówienia, z szumem, trzaskiem i dźwiękiem silnika. Nic nie powinno zostać wysłane. VAD nie jest klasyfikatorem wszystkich przypadkowych dźwięków — dobierz próg i mikrofon.
-5. W prywatnej sesji treningowej przy postoju skalibruj stabilną ramkę. Z podglądu wyślij neutralne „Sorry, my mistake.” Sprawdź T, tekst, Enter i dokładnie jedną wiadomość.
-6. Powtórz dla fullscreen i borderless, różnych opóźnień; jeśli screenshot jest czarny lub ramka niestabilna, test nie przeszedł. Nie wyłączaj weryfikacji.
-7. Uaktywnij Notatnik przed próbą, w trakcie pauzy po T i podczas wpisywania. Próba powinna zostać anulowana. Sprawdź też Esc podczas nagrania, przetwarzania i oczekiwania. Po anulowaniu oczyść czat ręcznie.
-8. Spróbuj ponownie wysłać ten sam podgląd. Enter nie może zostać ponowiony. Nowe nagranie z tym samym tekstem ma prawo utworzyć nową wiadomość.
-9. Zapisz konfigurację, zamknij z zasobnika, uruchom ponownie. Sprawdź mikrofon, GUID/przycisk, tryb i opóźnienia. Sprawdź pracę po minimalizacji.
-10. Dopiero po pozytywnych testach włącz auto-send, zapisz ustawienia i wykonaj pełny scenariusz jednym przyciskiem. Stopniowo testuj podczas jazdy w prywatnej sesji.
+## Przygotowanie (bez gry)
 
-Nie ma automatycznego potwierdzenia doręczenia; trzeba zobaczyć wiadomość w grze. Testy atrapy nie zastępują powyższych testów.
+1. Podłącz A50 i Simucube. Uruchom `Start.cmd` → zakładka **Diagnostyka** → „Odśwież”: A50 Mic na liście, Simucube 2 Pro ze 128 przyciskami, CUDA „cuBLAS 12 i cuDNN 9: załadowane”.
+2. **Ustawienia**: mikrofon A50, silnik `two-stage`, model `medium`, obliczenia `auto`, w słowniku nazwy toru (np. `Eau Rouge, Raidillon`). „Przypisz” → przycisk na kierownicy. **Automatyczne wysyłanie: WYŁĄCZONE.** „Zapisz ustawienia”.
+3. **Start** → „Pobierz + załaduj model” (lub „Załaduj offline”). W nagłówku: „Gotowy”, bez żółtego ostrzeżenia GPU.
+4. Przytrzymaj przycisk, powiedz „Przepraszam, mój błąd”, puść. Podgląd ma pokazać sensowne tłumaczenie.
+
+## W grze — prywatna sesja treningowa, samochód w boksie lub na postoju
+
+5. Nagłówek programu: „● iRacing wykryty”. Jeśli „niewykryty” — zapisz to i przerwij.
+6. Okno iRacing aktywne. W programie: nagraj przyciskiem „Sorry, my mistake” w trybie podglądu → „Wyślij podgląd za 5 s” → kliknij w okno iRacing.
+   - **Oczekiwane:** czat otwiera się sam, pojawia się dokładnie jedna wiadomość `Sorry, my mistake.` (lub podobna), czat się zamyka.
+   - Zapisz: czy czat się otworzył, czy tekst jest kompletny i bez dziwnych znaków, czy Enter wysłał.
+7. Pole z resztkami: otwórz czat ręcznie (T), wpisz „abc”, nie wysyłaj, kliknij w iRacing i powtórz wysyłkę z kroku 6. **Oczekiwane:** „abc” znika (Cancel), wysłana jest tylko nowa wiadomość.
+8. Przerwanie: wyślij długi podgląd (np. trzy zdania) i w trakcie wpisywania naciśnij Alt+Tab do innego okna. **Oczekiwane:** wpisywanie stoi, po powrocie do iRacing czat jest zamknięty i pusty.
+9. Esc: zacznij wysyłanie i naciśnij Esc w trakcie odliczania 5 s. **Oczekiwane:** nic nie zostało wysłane, czat zamknięty.
+10. Długa wypowiedź (ok. 20 s): ma przyjść jako 2–3 osobne wiadomości, każda kompletna.
+11. Pauzy: jeśli brakuje pierwszych liter, zwiększ „Pauza po otwarciu” (np. 500 ms); jeśli gubione są znaki w środku — „Pauza między znakami” (np. 20 ms).
+12. Fullscreen i borderless: powtórz krok 6 w obu trybach.
+13. Dopiero gdy 6–10 przeszły: włącz automatyczne wysyłanie, zapisz, wykonaj pełny scenariusz jednym przyciskiem (przytrzymaj, mów, puść → wiadomość w czacie). Potem krótko podczas jazdy.
+14. Opcjonalnie: zaznacz „Dodaj do słownika tor i kierowców z bieżącej sesji iRacing” i powiedz zdanie z nickiem kierowcy z sesji.
+
+Nie zgłaszaj testu jako zaliczonego bez zobaczenia wiadomości w czacie. Wyniki (bez nagrań) dopisz do `docs/TEST-REPORT.md`.
