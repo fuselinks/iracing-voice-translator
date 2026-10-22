@@ -10,10 +10,11 @@ from ivt.audio import usable, RATE
 class FakeChat:
     """Stateful iRacing chat: SDK BeginChat opens, SDK Cancel clears and closes, Enter submits."""
     def __init__(self):
-        self.focus=1;self.connected=True;self.open=False;self.buffer='';self.messages=[];self.events=[];self.lose_after=None
+        self.focus=1;self.connected=True;self.problem='';self.open=False;self.buffer='';self.messages=[];self.events=[];self.lose_after=None
     def target(self):return self.focus
     def sdk_connected(self):return self.connected
     def prepare(self,text,window):return list(text)
+    def input_problem(self,window):return self.problem
     def begin_chat(self):self.events.append('begin');self.open=True
     def cancel_chat(self):self.events.append('cancel');self.open=False;self.buffer=''
     def enter(self):
@@ -63,6 +64,10 @@ class Tests(unittest.TestCase):
         self.chat.character=broken
         with self.assertRaises(OSError):self.sender.send('one','Hello',self.cancel)
         self.assertEqual(self.chat.events,['cancel','begin','cancel'])
+    def test_elevated_game_blocks_before_chat(self):
+        self.chat.problem='iRacing działa jako administrator'
+        with self.assertRaisesRegex(Cancelled,'administrator'):self.sender.send('one','Hello',self.cancel)
+        self.assertFalse(self.chat.events)
     def test_cancel_before_start(self):
         self.cancel.set()
         with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)

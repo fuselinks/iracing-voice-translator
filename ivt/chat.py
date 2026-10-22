@@ -52,6 +52,9 @@ class Sender:
             check()
             if not self.io.sdk_connected():
                 raise Cancelled('iRacing SDK nie jest połączone — uruchom sesję w symulatorze')
+            problem = self.io.input_problem(window)
+            if problem:
+                raise Cancelled(problem)
             # Every character is mapped before the chat opens, so a bad character cannot leave it half-typed.
             plans = [self.io.prepare(part, window) for part in parts]
             self.attempted.add(identity)

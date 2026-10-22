@@ -9,7 +9,9 @@ KEYEVENTF_KEYUP = 0x0002
 KEYEVENTF_SCANCODE = 0x0008
 INPUT_KEYBOARD = 1
 MAPVK_VK_TO_VSC_EX = 4
-SCAN_SHIFT, SCAN_CTRL, SCAN_ALT, SCAN_ENTER = 0x2A, 0x1D, 0x38, 0x1C
+MAPVK_VSC_TO_VK_EX = 3
+SCAN_SHIFT, SCAN_CTRL, SCAN_ALT, SCAN_ENTER, SCAN_SPACE = 0x2A, 0x1D, 0x38, 0x1C, 0x39
+TOUNICODE_KEEP_STATE = 0x4  # do not disturb the dead-key state of the keyboard
 
 REPLACEMENTS = {
     '‘': "'", '’': "'", '‚': "'", '‛': "'", '′': "'", '`': "'",
@@ -78,6 +80,8 @@ user32.GetKeyboardLayout.argtypes = [wintypes.DWORD]
 user32.GetKeyboardLayout.restype = wintypes.HKL
 user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
 user32.GetWindowThreadProcessId.restype = wintypes.DWORD
+user32.ToUnicodeEx.argtypes = [wintypes.UINT, wintypes.UINT, ctypes.c_char_p, wintypes.LPWSTR, ctypes.c_int, wintypes.UINT, wintypes.HKL]
+user32.ToUnicodeEx.restype = ctypes.c_int
 
 def layout_of(hwnd):
     """Keyboard layout (HKL) active in the thread that owns the window."""
@@ -123,9 +127,31 @@ def press(keys):
     send([key_event(m) for m in modifiers] + [key_event(scan), key_event(scan, True)]
          + [key_event(m, True) for m in reversed(modifiers)])
 
+def produced(keys, hkl):
+    """What the layout produces for this stroke: (ToUnicodeEx result, text); -1 marks a dead key."""
+    modifiers, scan = keys
+    vk = user32.MapVirtualKeyExW(scan | (0xE000 if scan > 0xFF else 0), MAPVK_VSC_TO_VK_EX, hkl)
+    state = (ctypes.c_ubyte * 256)()
+    for modifier, vk_modifier in ((SCAN_SHIFT, 0x10), (SCAN_CTRL, 0x11), (SCAN_ALT, 0x12)):
+        if modifier in modifiers:
+            state[vk_modifier] = 0x80
+    buffer = ctypes.create_unicode_buffer(8)
+    count = user32.ToUnicodeEx(vk, scan & 0xFF, ctypes.cast(state, ctypes.c_char_p), buffer, 8, TOUNICODE_KEEP_STATE, hkl)
+    return count, buffer.value[:max(count, 0)]
+
+def strokes(char, hkl):
+    """Strokes typing exactly `char`; a dead key (e.g. ~ in Polish programmers) is followed by Space."""
+    keys = stroke(char, hkl)
+    count, text = produced(keys, hkl)
+    if count < 0:
+        return [keys, ((), SCAN_SPACE)]
+    if text != char:
+        raise ValueError(f'Znak {char!r} daje w układzie iRacing {text!r}')
+    return [keys]
+
 def plan(text, hwnd):
     hkl = layout_of(hwnd)
-    return [stroke(char, hkl) for char in text]
+    return [keys for char in text for keys in strokes(char, hkl)]
 
 def enter():
     press(((), SCAN_ENTER))
