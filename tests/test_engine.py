@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from ivt.config import Config
 import tempfile
 from pathlib import Path
-from ivt.engine import Engine, model_folder
+from ivt.engine import Engine, is_hallucination, model_folder, PROMPT_TRANSLATE, PROMPT_TRANSCRIBE
 
 class EngineTests(unittest.TestCase):
     def segment(self,text='Sorry, my mistake.'):
@@ -22,6 +22,29 @@ class EngineTests(unittest.TestCase):
         engine.model.transcribe.return_value=([self.segment('Mój błąd.')],None)
         self.assertEqual(engine.process('local.wav')[1],'Mój błąd.')
         self.assertEqual(engine.model.transcribe.call_args.kwargs['task'],'transcribe')
+        self.assertEqual(engine.model.transcribe.call_args.kwargs['initial_prompt'],PROMPT_TRANSCRIBE)
+    def test_translate_uses_english_prompt(self):
+        engine=Engine(Config());engine.model=Mock()
+        engine.model.transcribe.return_value=([self.segment()],None);engine.process('local.wav')
+        self.assertEqual(engine.model.transcribe.call_args.kwargs['initial_prompt'],PROMPT_TRANSLATE)
+    def test_hallucinations_dropped(self):
+        for text in ['Thank you for watching!','Thanks for watching.','Subtitles by the Amara.org community','amara.org',
+                     'Napisy wykonał: Jan','Napisy stworzone przez społeczność','Dziękuję za uwagę.','Dziękuję za obejrzenie!',
+                     'Thank you for your attention.','you','You.','Bye.','bye bye','Thank you.',' ... ','',
+                     'Please subscribe','www.example.com','Apex, braking point, blue flags.','pit entry, inside, outside, rejoin']:
+            self.assertTrue(is_hallucination(text,PROMPT_TRANSLATE),text)
+    def test_real_speech_kept(self):
+        for text in ['Sorry, I did not see you on the inside, my mistake.','Good race, thanks!','No.','Sorry!',
+                     'Blue flags, I will let you pass on the straight.','Thank you for the clean race.',
+                     "Don't brake so early before turn two.",'Nie hamuj tak wcześnie.','Dobry wyścig, dzięki.','Mój błąd.','Blue flags, inside.']:
+            self.assertFalse(is_hallucination(text,PROMPT_TRANSLATE),text)
+            self.assertFalse(is_hallucination(text,PROMPT_TRANSCRIBE),text)
+    def test_hallucinated_segment_removed_real_kept(self):
+        engine=Engine(Config());engine.model=Mock()
+        engine.model.transcribe.return_value=([self.segment('Sorry, my mistake.'),self.segment('Thank you for watching.')],None)
+        self.assertEqual(engine.process('local.wav')[1],'Sorry, my mistake.')
+        engine.model.transcribe.return_value=([self.segment('Subtitles by the Amara.org community')],None)
+        self.assertEqual(engine.process('local.wav')[1],'')
     def test_model_folder(self):
         with tempfile.TemporaryDirectory() as folder:
             target=Path(folder)/'small';fetched=[]

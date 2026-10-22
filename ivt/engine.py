@@ -9,6 +9,30 @@ from .config import DATA
 from . import cuda
 
 log = logging.getLogger(__name__)
+PROMPT_TRANSLATE = 'iRacing, apex, braking point, blue flags, pit entry, inside, outside, rejoin, track limits.'
+PROMPT_TRANSCRIBE = 'Rozmowa kierowców w wyścigu iRacing: wewnętrzna, zewnętrzna, hamowanie, zakręt, niebieskie flagi, pit, prosta, okrążenie.'
+# Typical Whisper output for silence/noise (YouTube subtitle credits and sign-offs), Polish and English.
+HALLUCINATION_PATTERNS = re.compile('|'.join([
+    r'thanks? (you )?for watching', r'thank you for (your )?(attention|listening|viewing)', r'(please )?(like and )?subscribe',
+    r'(subtitles?|captions?|transcri\w*|translat\w*|napisy\w*|tłumacz\w*) (by|made by|created by|wykona\w*|stworz\w*|przygotowa\w*|przez|robione)',
+    r'amara\s*\.?\s*org', r'\bnapisy\b', r'dzi[eę]kuj[eę] za (uwag[eę]|obejrzenie|ogl[aą]danie|wys[lł]uchanie)', r'dzi[eę]ki za (obejrzenie|ogl[aą]danie)',
+    r'zasubskrybuj', r'subskrybuj', r'www\.\S+', r'\bcopyright\b',
+]), re.IGNORECASE)
+HALLUCINATION_EXACT = {'you', 'bye', 'bye bye', 'thank you', 'thank you very much', 'thanks', 'so', 'oh', 'ah', 'uh', 'um', 'hmm',
+                       'mhm', 'the end', 'dziękuję', 'dzięki', 'do widzenia', 'koniec'}
+
+def words(text):
+    return re.sub(r"[^\w' ]+", ' ', text.lower()).split()
+
+def is_hallucination(text, prompt=''):
+    normalized = ' '.join(words(text))
+    if not normalized:
+        return True
+    if HALLUCINATION_PATTERNS.search(text) or normalized in HALLUCINATION_EXACT:
+        return True
+    # The decoder sometimes echoes a chunk of the initial prompt when it hears nothing.
+    return len(normalized.split()) >= 4 and normalized in ' '.join(words(prompt))
+
 def model_folder(target, download, fetch, legacy):
     """Plain folder download (no symlinks: Windows without Developer Mode refuses them, WinError 1314)."""
     marker = target / '.ivt-complete'
@@ -87,10 +111,14 @@ class Engine:
             raise RuntimeError('Najpierw załaduj model')
         start = time.perf_counter()
         task = 'translate' if self.config.engine == 'direct' else 'transcribe'
+        prompt = PROMPT_TRANSLATE if task == 'translate' else PROMPT_TRANSCRIBE
         segments, _ = self.model.transcribe(audio, language='pl', task=task, beam_size=3, vad_filter=True,
-            condition_on_previous_text=False, temperature=0, initial_prompt='iRacing, apex, braking point, blue flags, pit entry, inside, outside, rejoin, track limits.')
+            condition_on_previous_text=False, temperature=0, initial_prompt=prompt)
         kept = [s.text.strip() for s in segments if s.no_speech_prob < 0.6 and s.avg_logprob > -1.0]
+        kept = [t for t in kept if not is_hallucination(t, prompt)]
         text = ' '.join(kept).strip()
+        if text and is_hallucination(text, prompt):
+            text = ''
         speech_time = time.perf_counter() - start
         source, output = text, text
         translate_time = 0.0
