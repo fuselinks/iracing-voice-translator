@@ -1,9 +1,30 @@
 import os
 os.environ['HF_HUB_DISABLE_TELEMETRY'] = '1'
 os.environ['HF_HUB_DISABLE_IMPLICIT_TOKEN'] = '1'
+import logging
 import time
 import re
+import numpy as np
 from .config import DATA
+from . import cuda
+
+log = logging.getLogger(__name__)
+def model_folder(target, download, fetch, legacy):
+    """Plain folder download (no symlinks: Windows without Developer Mode refuses them, WinError 1314)."""
+    marker = target / '.ivt-complete'
+    if marker.exists():
+        return str(target)
+    if download:
+        try:
+            fetch(str(target))
+        except Exception as exc:
+            raise RuntimeError(f'Pobieranie modelu nie powiodło się ({target.name}): {exc}') from exc
+        marker.write_text('ok', encoding='utf-8')
+        return str(target)
+    try:
+        return legacy()  # symlinked Hugging Face cache used by earlier versions
+    except Exception as exc:
+        raise RuntimeError(f'Model {target.name} nie jest pobrany — użyj „Pobierz + załaduj model”') from exc
 
 class Engine:
     def __init__(self, config):
@@ -11,58 +32,65 @@ class Engine:
         self.model = None
         self.translator = None
         self.actual_device = ''
+        self.warning = ''
+
+    def _whisper(self, device, path):
+        from faster_whisper import WhisperModel
+        model = WhisperModel(path, device=device, compute_type='int8_float16' if device == 'cuda' else 'int8',
+                             cpu_threads=4, num_workers=1)
+        # cuBLAS/cuDNN are loaded lazily on the first decode: warm up now so GPU errors surface at load time.
+        noise = (np.random.default_rng(0).standard_normal(16000) * 0.01).astype(np.float32)
+        segments, _ = model.transcribe(noise, language='pl', beam_size=1, vad_filter=False, without_timestamps=True)
+        list(segments)
+        return model
 
     def load(self, download=False):
-        from faster_whisper import WhisperModel
-        import ctranslate2
+        state = cuda.setup()
+        self.model, self.warning = None, ''
+        from faster_whisper.utils import download_model
+        path = model_folder(DATA / 'models' / self.config.model, download,
+                            lambda target: download_model(self.config.model, output_dir=target),
+                            lambda: download_model(self.config.model, local_files_only=True, cache_dir=str(DATA / 'models')))
         device = self.config.device
-        if device == 'auto':
-            device = 'cuda' if ctranslate2.get_cuda_device_count() else 'cpu'
-            if device == 'cuda' and os.name == 'nt':
-                import ctypes
-                try:
-                    ctypes.WinDLL('cublas64_12.dll')
-                    ctypes.WinDLL('cudnn64_9.dll')
-                except OSError:
-                    device = 'cpu'
-        kwargs = dict(download_root=str(DATA / 'models'), local_files_only=not download, cpu_threads=4, num_workers=1)
-        try:
-            self.model = WhisperModel(self.config.model, device=device, compute_type='int8_float16' if device == 'cuda' else 'int8', **kwargs)
-        except Exception:
-            if self.config.device != 'auto' or device != 'cuda':
-                raise
-            device = 'cpu'
-            self.model = WhisperModel(self.config.model, device=device, compute_type='int8', **kwargs)
+        if device in ('auto', 'cuda'):
+            try:
+                import ctranslate2
+                if not ctranslate2.get_cuda_device_count():
+                    raise RuntimeError('CTranslate2 nie widzi karty CUDA (sterownik NVIDIA?)')
+                if state['missing']:
+                    raise RuntimeError('brak bibliotek ' + ', '.join(state['missing']))
+                self.model = self._whisper('cuda', path)
+                device = 'cuda'
+            except Exception as exc:
+                if self.config.device == 'cuda':
+                    raise RuntimeError(f'GPU nie działa: {exc}') from exc
+                log.warning('CUDA unavailable, using CPU: %s', exc)
+                self.warning = f'GPU NIE DZIAŁA — model działa na CPU (wolniej). Powód: {exc}'
+                device = 'cpu'
+        if self.model is None:
+            self.model = self._whisper('cpu', path)
         self.actual_device = device
         if self.config.engine == 'two-stage':
             import torch
             torch.set_num_threads(2)
             from transformers import MarianMTModel, MarianTokenizer
+            from huggingface_hub import snapshot_download
             name = 'Helsinki-NLP/opus-mt-pl-en'
-            kwargs = dict(cache_dir=str(DATA / 'translation'), local_files_only=not download)
-            self.tokenizer = MarianTokenizer.from_pretrained(name, **kwargs)
-            self.translator = MarianMTModel.from_pretrained(name, **kwargs).eval()
+            path = model_folder(DATA / 'translation' / 'opus-mt-pl-en', download,
+                                lambda target: snapshot_download(name, local_dir=target),
+                                lambda: snapshot_download(name, cache_dir=str(DATA / 'translation'), local_files_only=True))
+            self.tokenizer = MarianTokenizer.from_pretrained(path)
+            self.translator = MarianMTModel.from_pretrained(path).eval()
 
     def process(self, audio):
         if self.model is None:
             raise RuntimeError('Najpierw załaduj model')
         start = time.perf_counter()
         task = 'translate' if self.config.engine == 'direct' else 'transcribe'
-        def decode():
-            segments, _ = self.model.transcribe(audio, language='pl', task=task, beam_size=3, vad_filter=True,
-                condition_on_previous_text=False, temperature=0, initial_prompt='iRacing, apex, braking point, blue flags, pit entry, inside, outside, rejoin, track limits.')
-            return ' '.join(s.text.strip() for s in segments if s.no_speech_prob < 0.6 and s.avg_logprob > -1.0).strip()
-        try:
-            text = decode()
-        except RuntimeError:
-            if self.config.device != 'auto' or self.actual_device != 'cuda':
-                raise
-            from faster_whisper import WhisperModel
-            self.model = None
-            self.model = WhisperModel(self.config.model, device='cpu', compute_type='int8', cpu_threads=4,
-                download_root=str(DATA / 'models'), local_files_only=True)
-            self.actual_device = 'cpu'
-            text = decode()
+        segments, _ = self.model.transcribe(audio, language='pl', task=task, beam_size=3, vad_filter=True,
+            condition_on_previous_text=False, temperature=0, initial_prompt='iRacing, apex, braking point, blue flags, pit entry, inside, outside, rejoin, track limits.')
+        kept = [s.text.strip() for s in segments if s.no_speech_prob < 0.6 and s.avg_logprob > -1.0]
+        text = ' '.join(kept).strip()
         speech_time = time.perf_counter() - start
         source, output = text, text
         translate_time = 0.0
