@@ -28,8 +28,6 @@ class Config:
     char_delay: float = 0.01
     auto_send: bool = False
     beeps: bool = True
-    roi: str = ''
-    visual_threshold: float = 8.0
 
     @classmethod
     def load(cls, folder=DATA):

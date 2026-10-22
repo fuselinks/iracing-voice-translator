@@ -1,7 +1,10 @@
-"""Guarded sequence; transport is injectable for deterministic tests."""
+"""Guarded chat sequence; transport is injectable for deterministic tests."""
+import logging
 import threading
 import time
 import re
+
+log = logging.getLogger(__name__)
 
 class Cancelled(RuntimeError):
     pass
@@ -17,6 +20,10 @@ def clean_message(text, limit):
     return text
 
 class Sender:
+    """Focus + SDK check → Cancel → BeginChat → pause → text → pause → focus check → Enter.
+
+    Every interruption after the first SDK command sends Cancel, so no half-typed field stays open.
+    """
     def __init__(self, transport, config):
         self.io, self.config = transport, config
         self.lock = threading.Lock()
@@ -32,31 +39,38 @@ class Sender:
                 raise Cancelled('Ta próba była już wykonana; brak automatycznego ponawiania')
             window = self.io.target()
             def check():
-                if cancel.is_set() or not window or self.io.target() != window:
-                    raise Cancelled('Anulowano lub iRacing utracił fokus')
+                if cancel.is_set():
+                    raise Cancelled('Anulowano')
+                if not window or self.io.target() != window:
+                    raise Cancelled('iRacing nie jest aktywnym oknem')
             def pause(seconds):
                 until = time.monotonic() + seconds
                 while time.monotonic() < until:
                     check()
-                    time.sleep(0.01)
+                    time.sleep(min(0.01, seconds))
                 check()
             check()
-            if not self.io.closed():
-                raise Cancelled('Nie potwierdzono zamkniętego czatu / kalibracji')
-            check()
+            if not self.io.sdk_connected():
+                raise Cancelled('iRacing SDK nie jest połączone — uruchom sesję w symulatorze')
             self.attempted.add(identity)
-            self.io.key('t')
-            pause(self.config.open_delay)
-            if not self.io.opened():
-                raise Cancelled('Nie potwierdzono otwarcia czatu')
-            for char in text:
+            try:
+                self.io.cancel_chat()
+                pause(0.05)
+                self.io.begin_chat()
+                pause(self.config.open_delay)
+                for char in text:
+                    check()
+                    self.io.character(char)
+                    pause(self.config.char_delay)
+                pause(self.config.send_delay)
                 check()
-                self.io.character(char)
-            pause(self.config.send_delay)
-            if not self.io.opened():
-                raise Cancelled('Pole czatu nie jest już potwierdzone')
-            check()
-            self.io.key('enter')
+                self.io.enter()
+            except BaseException:
+                try:
+                    self.io.cancel_chat()
+                except Exception:
+                    log.exception('Chat cancel after interruption failed')
+                raise
             return time.perf_counter() - started
         finally:
             self.lock.release()

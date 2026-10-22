@@ -8,7 +8,7 @@ import uuid
 import tkinter as tk
 from tkinter import ttk, messagebox
 from collections import deque
-from .config import Config, DATA
+from .config import Config
 from .audio import Recorder, usable, RATE, microphones
 from .engine import Engine
 from .chat import Sender
@@ -75,12 +75,8 @@ class App:
         self.beeps = tk.BooleanVar(value=self.config.beeps)
         ttk.Checkbutton(self.frame,text='Automatyczne wysyłanie (włącz po testach)',variable=self.auto).pack(anchor='w')
         ttk.Checkbutton(self.frame,text='Sygnały dźwiękowe',variable=self.beeps).pack(anchor='w')
-        ttk.Label(self.frame,text='Kalibracja: stabilny fragment RAMKI czatu, poza wpisywanym tekstem; x1,y1,x2,y2').pack(anchor='w')
-        self.roi=tk.StringVar(value=self.config.roi)
-        ttk.Entry(self.frame,textvariable=self.roi).pack(fill='x')
-        row=ttk.Frame(self.frame); row.pack(fill='x',pady=5)
-        for text, state in [('Zapisz ZAMKNIĘTY za 5 s','closed'),('Zapisz OTWARTY za 5 s','open')]:
-            ttk.Button(row,text=text,command=lambda s=state:self.calibrate(s)).pack(side='left')
+        self.sdk_state=tk.StringVar(value='iRacing: sprawdzanie…')
+        ttk.Label(self.frame,textvariable=self.sdk_state).pack(anchor='w')
         row=ttk.Frame(self.frame); row.pack(fill='x',pady=5)
         for text, command in [('Zapisz ustawienia',self.save),('Pobierz + załaduj model',lambda:self.load(True)),('Załaduj offline',lambda:self.load(False))]:
             ttk.Button(row,text=text,command=command).pack(side='left')
@@ -117,10 +113,7 @@ class App:
         choice=self.mic_box.current()
         new.microphone=self.mics[choice-1].name if choice>0 else ''
         new.microphone_api=self.mics[choice-1].hostapi if choice>0 else 'MME'
-        new.roi=self.roi.get(); new.auto_send=self.auto.get(); new.beeps=self.beeps.get()
-        if new.roi != self.config.roi:
-            for state in ('open','closed'):
-                (DATA / (state+'.png')).unlink(missing_ok=True)
+        new.auto_send=self.auto.get(); new.beeps=self.beeps.get()
         changed=(new.model,new.device,new.engine)!=(self.config.model,self.config.device,self.config.engine)
         self.config=new; self.config.save()
         self.io.config=new; self.sender.config=new
@@ -199,16 +192,6 @@ class App:
             self.beep(1200); self.events.put(('status','Zakończono próbę wysłania'))
         self.worker(job)
 
-    def calibrate(self,state):
-        if self.busy or self.recording:return
-        self.save(); self.busy=True
-        self.status.set('Za 5 s kalibracja: '+state+' — aktywuj iRacing')
-        self.cancel.clear()
-        def job():
-            if self.cancel.wait(5):return
-            self.io.calibrate(state); self.events.put(('status','Zapisano kalibrację '+state))
-        self.worker(job)
-
     def init_inputs(self):
         import pygame
         pygame.display.init(); pygame.joystick.init()
@@ -282,6 +265,10 @@ class App:
                     self.log.configure(state='normal');self.log.delete('1.0','end');self.log.insert('1.0','\n\n'.join(self.history));self.log.configure(state='disabled')
                 elif event=='show':self.root.deiconify()
                 elif event=='quit':self.quit();return
+            now=time.monotonic()
+            if now-getattr(self,'sdk_checked',0)>1:
+                self.sdk_checked=now
+                self.sdk_state.set('iRacing: wykryty (SDK połączone)' if self.io.sdk_connected() else 'iRacing: niewykryty')
             self.level['value']=min(100,self.recorder.level*400)
             if self.recording and time.perf_counter()-self.record_started>=self.config.max_seconds:self.stop()
         except Exception as exc:self.status.set('Błąd: '+str(exc))

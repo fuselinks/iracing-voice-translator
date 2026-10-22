@@ -8,18 +8,17 @@ from ivt.chat import Sender, Cancelled, clean_message
 from ivt.audio import usable, RATE
 
 class FakeChat:
-    """Stateful chat field: T opens, characters append, Enter submits."""
+    """Stateful iRacing chat: SDK BeginChat opens, SDK Cancel clears and closes, Enter submits."""
     def __init__(self):
-        self.focus=1;self.open=False;self.buffer='';self.messages=[];self.events=[];self.lose_after=None
+        self.focus=1;self.connected=True;self.open=False;self.buffer='';self.messages=[];self.events=[];self.lose_after=None
     def target(self):return self.focus
-    def closed(self):return not self.open
-    def opened(self):return self.open
-    def key(self,key):
-        self.events.append(key)
-        if key=='t':self.open=True
-        elif key=='enter':
-            if not self.open:raise AssertionError('Enter outside chat')
-            self.messages.append(self.buffer);self.buffer='';self.open=False
+    def sdk_connected(self):return self.connected
+    def begin_chat(self):self.events.append('begin');self.open=True
+    def cancel_chat(self):self.events.append('cancel');self.open=False;self.buffer=''
+    def enter(self):
+        self.events.append('enter')
+        if not self.open:raise AssertionError('Enter outside chat')
+        self.messages.append(self.buffer);self.buffer='';self.open=False
     def character(self,char):
         if not self.open:raise AssertionError('Typing outside chat')
         self.buffer+=char
@@ -27,12 +26,12 @@ class FakeChat:
 
 class Tests(unittest.TestCase):
     def setUp(self):
-        self.cfg=Config(open_delay=0,send_delay=0)
+        self.cfg=Config(open_delay=0,send_delay=0,char_delay=0)
         self.chat=FakeChat();self.sender=Sender(self.chat,self.cfg);self.cancel=threading.Event()
     def test_sequence(self):
         self.sender.send('one','Sorry, my mistake.',self.cancel)
         self.assertEqual(self.chat.messages,['Sorry, my mistake.'])
-        self.assertEqual(self.chat.events,['t','enter'])
+        self.assertEqual(self.chat.events,['cancel','begin','enter'])
     def test_duplicate(self):
         self.sender.send('one','Hello',self.cancel)
         with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
@@ -41,22 +40,36 @@ class Tests(unittest.TestCase):
         self.chat.focus=None
         with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
         self.assertFalse(self.chat.events)
-    def test_focus_lost_mid_text(self):
+    def test_sdk_not_connected(self):
+        self.chat.connected=False
+        with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
+        self.assertFalse(self.chat.events)
+    def test_focus_lost_mid_text_cancels_field(self):
         self.chat.lose_after=3
         with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
-        self.assertEqual(self.chat.buffer,'Hel');self.assertFalse(self.chat.messages)
-    def test_cancel(self):
+        self.assertEqual(self.chat.events,['cancel','begin','cancel'])
+        self.assertFalse(self.chat.open);self.assertEqual(self.chat.buffer,'');self.assertFalse(self.chat.messages)
+    def test_cancel_during_typing_cancels_field(self):
+        original=self.chat.character
+        def typed(char):
+            original(char)
+            if len(self.chat.buffer)==2:self.cancel.set()
+        self.chat.character=typed
+        with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
+        self.assertEqual(self.chat.events[-1],'cancel');self.assertFalse(self.chat.open)
+    def test_transport_error_cancels_field(self):
+        def broken(char):raise OSError('SendInput failed')
+        self.chat.character=broken
+        with self.assertRaises(OSError):self.sender.send('one','Hello',self.cancel)
+        self.assertEqual(self.chat.events,['cancel','begin','cancel'])
+    def test_cancel_before_start(self):
         self.cancel.set()
         with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
         self.assertFalse(self.chat.events)
-    def test_chat_already_open(self):
-        self.chat.open=True
-        with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
-        self.assertFalse(self.chat.events)
-    def test_unconfirmed_open(self):
-        self.chat.opened=lambda:False
-        with self.assertRaises(Cancelled):self.sender.send('one','Hello',self.cancel)
-        self.assertEqual(self.chat.events,['t']);self.assertFalse(self.chat.buffer)
+    def test_leftover_text_cleared_first(self):
+        self.chat.open=True;self.chat.buffer='half typed'
+        self.sender.send('one','Hello',self.cancel)
+        self.assertEqual(self.chat.messages,['Hello'])
     def test_empty(self):
         with self.assertRaises(ValueError):self.sender.send('one','  \n ',self.cancel)
         self.assertFalse(self.chat.events)
