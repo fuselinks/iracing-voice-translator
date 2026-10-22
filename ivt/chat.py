@@ -43,6 +43,7 @@ class Sender:
             check()
             if not self.io.closed():
                 raise Cancelled('Nie potwierdzono zamkniętego czatu / kalibracji')
+            check()
             self.attempted.add(identity)
             self.io.key('t')
             pause(self.config.open_delay)

@@ -7,7 +7,7 @@ Lokalne nagrywanie polskiej mowy przyciskiem kierownicy → angielski tekst → 
 1. Zainstaluj Python 3.12 x64 z python.org, z Tk i opcją PATH.
 2. Uruchom dwuklikiem `Install.cmd`, następnie `Start.cmd`.
 3. Wybierz mikrofon, `medium`, `auto`, `direct`. Kliknij „Pobierz + załaduj model”. Pobranie wymaga internetu; kolejne uruchomienia: „Załaduj offline”.
-4. `auto` wybiera CUDA, a przy błędzie ładowania próbuje CPU. Jeśli błąd wystąpi dopiero podczas dekodowania, wybierz CPU i przeładuj model. Dla GPU zainstaluj sterownik NVIDIA, cuBLAS CUDA 12 i cuDNN 9 z oficjalnych źródeł NVIDIA, dodaj katalogi DLL do PATH. Zgodność RTX 5070 Ti trzeba potwierdzić diagnostyką i próbnym dekodowaniem.
+4. `auto` wybiera CUDA, a przy błędzie ładowania lub dekodowania próbuje CPU. Pierwsza awaryjna zmiana silnika zwiększy opóźnienie. Dla GPU zainstaluj sterownik NVIDIA, cuBLAS CUDA 12 i cuDNN 9 z oficjalnych źródeł NVIDIA, dodaj katalogi DLL do PATH. Zgodność RTX 5070 Ti trzeba potwierdzić diagnostyką i próbnym dekodowaniem.
 5. Wciśnij „Test mikrofonu i tłumaczenia”, powiedz krótkie zdanie, kliknij ponownie. Test zawsze kończy się podglądem. Poziom mikrofonu działa wyłącznie podczas nagrywania.
 
 Przyciski `Pobierz` i `Załaduj` nie uruchamiają nagrywania. Ustawienia zapisuj przyciskiem „Zapisz ustawienia”. Zmiana modelu/silnika wymaga ponownego ładowania. Domyślnie automatyczne wysyłanie jest wyłączone; po konfiguracji i udanym teście włącz je i zapisz.
@@ -38,7 +38,7 @@ Nie publikuj katalogu AppData, nagrań testowych ani zrzutów ekranu. `.gitignor
 
 - Zamknięcie okna minimalizuje aplikację do zasobnika. Z menu zasobnika wybierz „Zakończ”, aby ją wyłączyć.
 - Silnik `polish` wysyła polską transkrypcję. `direct` zwraca bezpośredni angielski wynik, bez osobnego polskiego tekstu.
-- Wariant `two-stage`: zainstaluj `.venv\Scripts\python -m pip install -r requirements-translation.txt`, wybierz silnik i pobierz modele. Tłumacz Marian działa na CPU.
+- Wariant `two-stage`: wybierz silnik i pobierz modele. Biblioteki tłumacza są uwzględnione w instalacji; Marian działa na CPU. Przy aktualizacji starszej instalacji doinstaluj `requirements-translation.txt`.
 - Autostart opcjonalny: Win+R → `shell:startup` → utwórz skrót do `Start.cmd` (lub zbudowanego EXE). Program nie zmienia rejestru samodzielnie.
 - Testy: `.venv\Scripts\python -m unittest discover -s tests -v`.
 - Diagnostyka bez nazw urządzeń i transkrypcji: `.venv\Scripts\python scripts\diagnostics.py`.
@@ -46,3 +46,5 @@ Nie publikuj katalogu AppData, nagrań testowych ani zrzutów ekranu. `.gitignor
 - Budowanie: `Build.cmd`. Uruchamiaj `dist\iRacingVoiceTranslator\iRacingVoiceTranslator.exe`; zachowaj cały katalog. To wydanie przenośne, bez instalatora. Modele pobiera się osobno.
 
 Rzeczywiste opóźnienia są w historii GUI. Dla direct czas `speech_s` obejmuje rozpoznawanie i tłumaczenie; nie można ich uczciwie rozdzielić. Błąd tłumaczenia, nazw, negacji i liczb jest możliwy. Nie gwarantujemy 1–2 s, braku spadków FPS ani niezawodnej detekcji obrazu. [Badania i kompromisy](docs/RESEARCH.md).
+
+[Raport wykonanych testów i pomiarów](docs/TEST-REPORT.md). Syntetyczna mowa nie zastępuje odbioru z Twoim mikrofonem i iRacing.

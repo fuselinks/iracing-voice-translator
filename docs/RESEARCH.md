@@ -18,7 +18,7 @@ Sprawdzenie dokumentacji: 22.10.2026. Implementacja własna; bez kopiowania kodu
 | B: Whisper transcribe + Marian opus-mt-pl-en | Polski tekst dostępny osobno; wymienne tłumaczenie | Drugie dekodowanie, dodatkowy RAM i zależności Torch; Marian działa na CPU |
 | Polish | Sama transkrypcja | Wiadomość pozostaje po polsku |
 
-Medium wybrano jako punkt startowy, nie zwycięzcę pomiarów. Nie wykonano pomiarów jakości, VRAM, FPS ani latencji na RTX 5070 Ti. Skrypt benchmark.py uruchamia small, medium i large-v3 z rozgrzewką oraz powtórzeniami, osobno dla A i B. Porównuj te same nagrania, ręcznie sprawdzając negacje, liczby, nazwiska i słownictwo wyścigowe. VRAM/FPS obserwuj zewnętrznie podczas sesji. Nie ma podstaw do obietnicy 1–2 sekund.
+Medium wybrano jako punkt startowy, nie zwycięzcę pomiarów jakości. Test działania wszystkich trzech modeli w wariantach A/B na syntetycznej mowie i CPU opisano w [raporcie](TEST-REPORT.md); direct był szybszy. Nie wykonano pomiarów jakości, VRAM, FPS ani latencji na RTX 5070 Ti. Skrypt benchmark.py uruchamia small, medium i large-v3 z rozgrzewką oraz powtórzeniami, osobno dla A i B. Porównuj te same nagrania, ręcznie sprawdzając negacje, liczby, nazwiska i słownictwo wyścigowe. VRAM/FPS obserwuj zewnętrznie podczas sesji. Nie ma podstaw do obietnicy 1–2 sekund.
 
 ## Ograniczenie potwierdzania czatu
 

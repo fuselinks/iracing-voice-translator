@@ -155,6 +155,7 @@ class App:
         def job():
             start=time.perf_counter()
             source,output,times=self.engine.process(audio)
+            self.events.put(('status','Model: '+self.config.model+' / '+self.engine.actual_device))
             if self.cancel.is_set():return
             if not output: self.events.put(('status','Odrzucono brak mowy'));return
             identity=uuid.uuid4().hex

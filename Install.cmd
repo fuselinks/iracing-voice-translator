@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 python -m venv .venv
 if errorlevel 1 goto fail
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv\Scripts\python -m pip install -r requirements-lock.txt
 if errorlevel 1 goto fail
 echo Installation complete. Use Start.cmd.
 pause
