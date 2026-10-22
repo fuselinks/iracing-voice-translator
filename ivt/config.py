@@ -28,6 +28,8 @@ class Config:
     char_delay: float = 0.01
     auto_send: bool = False
     beeps: bool = True
+    vocabulary: str = ''
+    sdk_names: bool = False
 
     @classmethod
     def load(cls, folder=DATA):
