@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 class Config:
     model: str = 'medium'
     device: str = 'auto'
-    engine: str = 'direct'
+    engine: str = 'two-stage'  # measured best meaning preservation on real recordings (docs/TEST-REPORT.md)
     microphone: str = ''
     microphone_api: str = 'MME'
     joystick: str = ''

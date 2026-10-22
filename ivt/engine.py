@@ -20,6 +20,7 @@ HALLUCINATION_PATTERNS = re.compile('|'.join([
     r'thanks? (you )?for watching', r'thank you for (your )?(attention|listening|viewing)', r'(please )?(like and )?subscribe',
     r'(subtitles?|captions?|transcri\w*|translat\w*|napisy\w*|tłumacz\w*) (by|made by|created by|wykona\w*|stworz\w*|przygotowa\w*|przez|robione)',
     r'amara\s*\.?\s*org', r'\bnapisy\b', r'dzi[eę]kuj[eę] za (uwag[eę]|obejrzenie|ogl[aą]danie|wys[lł]uchanie)', r'dzi[eę]ki za (obejrzenie|ogl[aą]danie)',
+    r'welcome to (my|our|the) channel', r'see you (in|on) the next (video|episode)', r'witaj(cie)? na (moim|naszym) kanale',
     r'zasubskrybuj', r'subskrybuj', r'www\.\S+', r'\bcopyright\b',
 ]), re.IGNORECASE)
 HALLUCINATION_EXACT = {'you', 'bye', 'bye bye', 'thank you', 'thank you very much', 'thanks', 'so', 'oh', 'ah', 'uh', 'um', 'hmm',

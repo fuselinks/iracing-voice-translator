@@ -10,7 +10,7 @@ class EngineTests(unittest.TestCase):
     def segment(self,text='Sorry, my mistake.'):
         return SimpleNamespace(text=text,no_speech_prob=0.1,avg_logprob=-0.2)
     def test_direct_task(self):
-        engine=Engine(Config());engine.model=Mock()
+        engine=Engine(Config(engine='direct'));engine.model=Mock()
         engine.model.transcribe.return_value=([self.segment()],None)
         source,output,times=engine.process('local.wav')
         self.assertEqual(output,'Sorry, my mistake.')
@@ -24,14 +24,14 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(engine.model.transcribe.call_args.kwargs['task'],'transcribe')
         self.assertEqual(engine.model.transcribe.call_args.kwargs['initial_prompt'],PROMPT_TRANSCRIBE)
     def test_translate_uses_english_prompt(self):
-        engine=Engine(Config());engine.model=Mock()
+        engine=Engine(Config(engine='direct'));engine.model=Mock()
         engine.model.transcribe.return_value=([self.segment()],None);engine.process('local.wav')
         self.assertEqual(engine.model.transcribe.call_args.kwargs['initial_prompt'],PROMPT_TRANSLATE)
     def test_hallucinations_dropped(self):
         for text in ['Thank you for watching!','Thanks for watching.','Subtitles by the Amara.org community','amara.org',
                      'Napisy wykonał: Jan','Napisy stworzone przez społeczność','Dziękuję za uwagę.','Dziękuję za obejrzenie!',
                      'Thank you for your attention.','you','You.','Bye.','bye bye','Thank you.',' ... ','',
-                     'Please subscribe','www.example.com','Dziękuje za oglądanie.',
+                     'Please subscribe','www.example.com','Welcome to my channel.','See you in the next video!','Dziękuje za oglądanie.',
                      # decoding loop observed on the silent A50 recording with VAD disabled
                      'iRacing, apex, braking point, pit entry, inside, outside, rejoin, pit entry, inside, outside, rejoin, pit entry, pit entry, pit entry, pit entry']:
             self.assertTrue(is_hallucination(text,PROMPT_TRANSLATE),text)
@@ -46,7 +46,7 @@ class EngineTests(unittest.TestCase):
             self.assertFalse(is_hallucination(text,PROMPT_TRANSLATE),text)
             self.assertFalse(is_hallucination(text,PROMPT_TRANSCRIBE),text)
     def test_hallucinated_segment_removed_real_kept(self):
-        engine=Engine(Config());engine.model=Mock()
+        engine=Engine(Config(engine='direct'));engine.model=Mock()
         engine.model.transcribe.return_value=([self.segment('Sorry, my mistake.'),self.segment('Thank you for watching.')],None)
         self.assertEqual(engine.process('local.wav')[1],'Sorry, my mistake.')
         engine.model.transcribe.return_value=([self.segment('Subtitles by the Amara.org community')],None)
@@ -65,7 +65,7 @@ class EngineTests(unittest.TestCase):
         long=build_prompt('translate',[f'Driver Number{i}' for i in range(100)])
         self.assertTrue(long.endswith(PROMPT_TRANSLATE));self.assertLessEqual(len(long),MAX_NAMES_CHARS+len(PROMPT_TRANSLATE)+12)
     def test_names_passed_to_model(self):
-        engine=Engine(Config());engine.model=Mock()
+        engine=Engine(Config(engine='direct'));engine.model=Mock()
         engine.model.transcribe.return_value=([self.segment()],None);engine.process('local.wav',['Eau Rouge'])
         self.assertIn('Eau Rouge',engine.model.transcribe.call_args.kwargs['initial_prompt'])
     def test_model_folder(self):
@@ -80,7 +80,7 @@ class EngineTests(unittest.TestCase):
             def symlink_error(path):raise OSError('[WinError 1314] symlink')
             with self.assertRaisesRegex(RuntimeError,'Pobieranie modelu'):model_folder(Path(folder)/'x',True,symlink_error,legacy)
     def test_low_confidence(self):
-        engine=Engine(Config());engine.model=Mock()
+        engine=Engine(Config(engine='direct'));engine.model=Mock()
         segment=self.segment();segment.no_speech_prob=0.99
         engine.model.transcribe.return_value=([segment],None)
         self.assertEqual(engine.process('local.wav')[1],'')
