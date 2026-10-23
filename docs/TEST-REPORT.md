@@ -2,9 +2,22 @@
 
 Komputer docelowy: Windows 11 (26200), RTX 5070 Ti 16 GB (sterownik 610.88), Python 3.12.3, CTranslate2 4.8.3, cuBLAS 12.9, cuDNN 9.27, układ klawiatury polski (programisty). Mikrofon: Astro A50 z Voice Clarity, „Fokus głosu” i bramką szumów. Kontrolery: Simucube 2 Pro i 7 innych urządzeń SDL.
 
-## Nie sprawdzono (wymaga sesji w iRacing)
+## Test w iRacing — 23.10.2026
 
-Otwarcie czatu przez SDK `BeginChat`/`Cancel`, wpisywanie scan code'ami do okna iRacing, Enter i odbiór wiadomości, odczyt nazw z YAML sesji na żywym symulatorze, PTT kierownicą w trakcie gry, SimHub F13–F20, wpływ na FPS. Procedura: [ACCEPTANCE.md](ACCEPTANCE.md).
+Sesja publiczna (Practice, Nordschleife Industriefahrten, Ferrari 296 GT3), `iRacingSim64DX11.exe` bez uprawnień administratora, SDK połączone. Ustawienia: A50 (MME), Simucube 2 Pro przycisk 12, `two-stage`, `medium`, CUDA, pauzy domyślne (otwarcie 350 ms, znaki 10 ms, przed Enter 150 ms). Procedura: [ACCEPTANCE.md](ACCEPTANCE.md). Wyniki zgłoszone przez użytkownika na podstawie tego, co widział w czacie:
+
+| Krok | Wynik |
+|---|---|
+| 5 „iRacing wykryty” | OK (SDK `status & 1` = 1, proces bez podniesionych uprawnień) |
+| 6 wysyłka z podglądu | OK — czat otwiera się przez SDK, tekst kompletny, Enter wysyła |
+| 7 resztki „abc” w polu | OK — usunięte przez Cancel, wysłana tylko nowa wiadomość |
+| 8 Alt+Tab w trakcie wpisywania | OK — wpisywanie przerwane |
+| 9, 10, 13 Esc, długa wypowiedź, pełny scenariusz z automatycznym wysyłaniem i w jeździe | OK (zgłoszone zbiorczo: „wszystkie testy ok”) |
+| 12 tryb okna | wszystkie testy w trybie okienkowym (fullscreen i borderless wyłączone); fullscreen/borderless nie sprawdzone |
+| 14 nazwy z sesji (YAML) | częściowo — odczyt działa (29 nazw: tor + kierowcy), rozpoznawanie nicków „średnio”. Poprawione po teście: numery iRacing usuwane (`Todd Murphy2` → `Todd Murphy`), własny nick i znaki spoza cp1252 (`?? King`) pomijane; skuteczność po poprawce nie sprawdzona |
+| wysyłka z ekranu garażu | OK |
+
+Znaleziony w trakcie błąd: „Pobierz + załaduj model” pobierał od nowa model obecny już w cache poprzedniej wersji; pobieranie stanęło na 0 B, a program pozostał w stanie „zajęty” („Najpierw zakończ bieżącą operację”). Poprawione (`aa3804d`): model z cache jest używany bez pobierania, komunikat nie zasłania trwającej operacji. Nie zweryfikowano: SimHub F13–F20, pomiar FPS.
 
 ## Testy automatyczne
 

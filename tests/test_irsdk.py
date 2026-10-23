@@ -35,6 +35,11 @@ class SdkTests(unittest.TestCase):
         with patch('ivt.irsdk.MEMMAP_NAME',self.mapping(0,yaml)):
             self.assertEqual(IRacingSDK().session_names(),[])
         self.assertEqual(session_names(''),[])
+        live=('WeekendInfo:\n TrackDisplayName: Nordschleife\nDriverInfo:\n DriverCarIdx: 1\n Drivers:\n'
+              ' - CarIdx: 0\n   UserName: Todd Murphy2\n   TeamName: Todd Murphy2\n'
+              ' - CarIdx: 1\n   UserName: Igor P Wojtkowiak\n   TeamName: Igor P Wojtkowiak\n'
+              ' - CarIdx: 12\n   UserName: Daniel White15\n - CarIdx: 13\n   UserName: ?? King\n - CarIdx: 14\n   UserName: ??\n')
+        self.assertEqual(session_names(live),['Nordschleife','Todd Murphy','Daniel White','King'])
     def test_connected_bit(self):
         for status,expected in [(1,True),(3,True),(0,False),(2,False)]:
             with patch('ivt.irsdk.MEMMAP_NAME',self.mapping(status)):

@@ -95,10 +95,21 @@ class IRacingSDK:
         self.broadcast(BROADCAST_CHAT_COMMAND, CHAT_CANCEL)
 
 def session_names(yaml_text):
+    own = re.search(r'^\s*DriverCarIdx:\s*(\d+)', yaml_text, re.MULTILINE)
+    own_block = re.search(rf'^\s*- CarIdx:\s*{own.group(1)}\s*$(.*?)(?=^\s*- CarIdx:|\Z)', yaml_text,
+                          re.MULTILINE | re.DOTALL) if own else None
+    own_name = re.search(r'^\s*UserName:\s*(.+?)\s*$', own_block.group(1), re.MULTILINE) if own_block else None
+    skip = {'pace car', 'safety car'} | ({own_name.group(1).strip('"\'').lower()} if own_name else set())
     names = []
     for key in ('TrackDisplayName', 'TrackDisplayShortName', 'UserName', 'TeamName'):
         for value in re.findall(rf'^\s*{key}:\s*(.+?)\s*$', yaml_text, re.MULTILINE):
             value = value.strip().strip('"\'')
-            if value and value.lower() not in ('pace car', 'safety car'):
-                names.append(value)
+            if not value or value.lower() in skip:
+                continue
+            if key in ('UserName', 'TeamName'):
+                # iRacing numbers duplicate names ("Todd Murphy2"); characters outside cp1252 arrive as "?"
+                value = re.sub(r'\s*\d+$', '', value).replace('?', '').strip()
+                if not value:
+                    continue
+            names.append(value)
     return list(dict.fromkeys(names))

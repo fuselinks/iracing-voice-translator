@@ -2,7 +2,7 @@
 
 Lokalnie: przycisk na kierownicy → polska mowa → angielski tekst → czat iRacing. Rozpoznawanie działa na Twoim komputerze (GPU NVIDIA lub CPU); audio nie opuszcza RAM.
 
-**Status:** kod i testy przeszły na docelowym PC (RTX 5070 Ti, A50, Simucube 2 Pro) — szczegóły w [raporcie testów](docs/TEST-REPORT.md). **Wysyłanie do czatu w samym iRacing nie zostało jeszcze sprawdzone** — zrób [test w sesji treningowej](docs/ACCEPTANCE.md), zanim włączysz automatyczne wysyłanie.
+**Status:** kod i testy przeszły na docelowym PC (RTX 5070 Ti, A50, Simucube 2 Pro) — szczegóły w [raporcie testów](docs/TEST-REPORT.md). Wysyłanie do czatu iRacing sprawdzone w sesji 23.10.2026 (podgląd, automatyczne wysyłanie, przerwania, jazda) — [wyniki](docs/TEST-REPORT.md#test-w-iracing--23102026). Na nowym komputerze zrób najpierw [test w sesji treningowej](docs/ACCEPTANCE.md).
 
 ## Instalacja
 
