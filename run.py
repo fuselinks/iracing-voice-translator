@@ -18,6 +18,12 @@ if __name__ == '__main__':
                     engine=Engine(Config(model='small',device='cpu',engine=mode))
                     engine.load()
                     assert engine.process(audio)[1].strip()
+            if '--self-test-cuda' in sys.argv:
+                from ivt.config import Config
+                from ivt.engine import Engine
+                engine=Engine(Config(model='small',device='cuda'))
+                engine.load()
+                assert engine.actual_device=='cuda'
         except Exception:
             sys.exit(2)
     else:

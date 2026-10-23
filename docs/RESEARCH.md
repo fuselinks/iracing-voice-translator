@@ -1,29 +1,46 @@
 # Decyzje techniczne i referencje
 
-Sprawdzenie dokumentacji: 22.10.2026. Implementacja własna; bez kopiowania kodu projektów referencyjnych.
+Aktualizacja: 22.10.2026. Implementacja własna; bez kopiowania kodu projektów referencyjnych.
 
-- [ChatShift](https://github.com/toffenloffen/ChatShift): rozdzielenie wejścia głosowego, tłumaczenia i adaptera gry. Dokument TECHNICAL_DETAILS wymaga wcześniejszego otwarcia edytowalnego pola, opisuje Ctrl+A/C/V i ograniczenia schowka. Nasz adapter otwiera czat i nie używa schowka. Aktualny plik LICENSE to „ChatShift Free Use and Attribution License 1.0”, z ograniczeniem niezależnych produktów pochodnych, mimo etykiety MIT w widoku repozytorium. Nie wykorzystano kodu.
-- [STTC-EVO](https://github.com/chopsuey2/sttc-evo): opis wskazuje Python, Deepgram i Gemini. W aktualnym widoku main dostępny był plik LICENSE (AGPL-3.0), bez kodu programu; nie dało się zweryfikować implementacji przycisków i klawiatury. Nie przyjęto jej działania w iRacing ani lokalnego przetwarzania.
-- [Crew Chief](https://mr_belowski.gitlab.io/CrewChiefV4/VoiceRecognition_FreeDictationChatMessages.html): start chat macro → znaki → end chat macro. Dokumentuje T/C, następnie Enter. Wykorzystano ideę sekwencji, nie kod.
-- [iRacing](https://support.iracing.com/support/solutions/articles/31000170165-pit-macros-chat-commands): T otwiera czat podczas jazdy; R odpowiada prywatnie. Prefiksy /, @, # mogą uruchamiać funkcje gry. Aplikacja blokuje początkowe prefiksy komend; nie ucina automatycznie długich wypowiedzi, aby nie zmienić znaczenia. Limit 180 jest konserwatywną wartością konfiguracyjną, a nie potwierdzonym limitem protokołu.
-- [SimHub Keyboard Emulator](https://github.com/SHWotever/SimHub/wiki/Additional-Plugin--Keyboard-Emulator-Plugin): alternatywne mapowanie przycisku do F9; konieczne zdarzenia key-down i key-up, nie krótki impuls w trybie PTT.
-- [Whisper](https://github.com/openai/whisper): multilingual translate do angielskiego; turbo nie jest przeznaczony do tłumaczenia.
-- [faster-whisper](https://github.com/SYSTRAN/faster-whisper): CTranslate2, int8 CPU / int8_float16 CUDA, VAD i model pozostający w RAM/VRAM. Dokumentowane CUDA 12 i cuDNN 9; zgodność konkretnego sterownika i RTX 5070 Ti wymaga pomiaru na docelowym komputerze.
+## Czat: oficjalne iRacing SDK zamiast weryfikacji obrazu
 
-## Warianty
+Poprzednia wersja potwierdzała otwarcie czatu porównaniem wycinka ekranu z dwoma wzorcami (kalibracja ROI). Była to heurystyka zależna od HUD, DPI i trybu okna, wymagała ręcznej kalibracji i mogła się mylić. Usunięto ją w całości.
 
-| Wariant | Zalety | Koszt / ryzyko |
-|---|---|---|
-| A: Whisper translate | Jeden model i jedno dekodowanie; domyślny medium | Brak osobnej polskiej transkrypcji; błędy nazw/negacji nadal możliwe |
-| B: Whisper transcribe + Marian opus-mt-pl-en | Polski tekst dostępny osobno; wymienne tłumaczenie | Drugie dekodowanie, dodatkowy RAM i zależności Torch; Marian działa na CPU |
-| Polish | Sama transkrypcja | Wiadomość pozostaje po polsku |
+Teraz program używa mechanizmu z iRacing SDK (`irsdk_defines.h`, `irsdk_utils.cpp`):
 
-Medium wybrano jako punkt startowy, nie zwycięzcę pomiarów jakości. Test działania wszystkich trzech modeli w wariantach A/B na syntetycznej mowie i CPU opisano w [raporcie](TEST-REPORT.md); direct był szybszy. Nie wykonano pomiarów jakości, VRAM, FPS ani latencji na RTX 5070 Ti. Skrypt benchmark.py uruchamia small, medium i large-v3 z rozgrzewką oraz powtórzeniami, osobno dla A i B. Porównuj te same nagrania, ręcznie sprawdzając negacje, liczby, nazwiska i słownictwo wyścigowe. VRAM/FPS obserwuj zewnętrznie podczas sesji. Nie ma podstaw do obietnicy 1–2 sekund.
+- **Stan:** mapa pamięci `Local\IRSDKMemMapFileName`, otwierana tylko do odczytu (`FILE_MAP_READ`); nagłówek `int ver; int status; …`, bit `irsdk_stConnected = 1`. Nagłówek zawiera też `sessionInfoLen` (+16) i `sessionInfoOffset` (+20) — YAML sesji, z którego opcjonalnie bierzemy nazwę toru i nicki kierowców do słownika.
+- **Polecenia:** `RegisterWindowMessageW("IRSDK_BROADCASTMSG")` i `SendNotifyMessageW(HWND_BROADCAST, msg, MAKELONG(irsdk_BroadcastChatComand=8, tryb), 0)`, tryby `irsdk_ChatCommand_BeginChat = 1`, `irsdk_ChatCommand_Cancel = 3`.
+- **Sekwencja:** fokus `iRacingSim64DX11.exe` + SDK połączone → Cancel (czyści pole) → BeginChat → pauza → tekst → pauza → fokus → Enter. Każde przerwanie po pierwszym poleceniu kończy się Cancel.
 
-## Ograniczenie potwierdzania czatu
+SDK nie potwierdza doręczenia ani tego, że pole czatu jest otwarte — potwierdzenie pozostaje wzrokowe. Brak zapisu do pamięci gry, hooków w procesie gry i obchodzenia zabezpieczeń.
 
-Gra nie udostępnia tu potwierdzenia odbioru. Lokalna weryfikacja obrazu ramki jest heurystyką; może odrzucić prawidłowy czat albo pomylić podobny obraz. Wymaga dwóch różnych wzorców przy tym samym HUD, DPI i rozdzielczości. Każde T/znak/Enter jest poprzedzone sprawdzeniem fokusu. Pomiędzy sprawdzeniem a wstrzyknięciem klawisza istnieje małe okno wyścigu systemowego; Windows nie zapewnia atomowego skierowania SendInput do konkretnego procesu. Nie jest to gwarancja bezbłędnego działania. Bez zgodności wzorca aplikacja odmawia wpisywania. Brak ingerencji w pamięć gry, hooków gry lub obchodzenia antycheat.
+## Wpisywanie
+
+`SendInput` z `KEYEVENTF_SCANCODE`: gry czytające raw input/DirectInput widzą prawdziwe scan code'y, a Windows wyprowadza z nich znaki w układzie wątku okna gry. Scan code z `VkKeyScanExW` + `MapVirtualKeyExW(MAPVK_VK_TO_VSC_EX)` dla `GetKeyboardLayout(wątek okna iRacing)`; Shift (i ewentualnie Ctrl+Alt dla AltGr) jako osobne scan code'y, w jednym wywołaniu `SendInput` na znak. Brak ścieżki Unicode/`VK_PACKET` — tę część gier ignoruje. Tekst jest najpierw sprowadzany do ASCII. Każdy znak jest sprawdzany przez `ToUnicodeEx` (bez zmiany stanu klawiatury): martwe klawisze (np. `~` w układzie polskim programisty) dostają spację, znaki niemożliwe w układzie blokują wysyłkę przed otwarciem czatu.
+
+UIPI: Windows po cichu odrzuca `SendInput` do okna procesu o wyższej integralności (np. gra uruchomiona jako administrator), a funkcja zwraca sukces. Program sprawdza poziom uprawnień procesu okna i zgłasza ten przypadek.
+
+Między sprawdzeniem fokusu a wstrzyknięciem klawisza zostaje małe okno wyścigu — Windows nie pozwala skierować `SendInput` do konkretnego procesu. Fokus jest sprawdzany przed każdym znakiem.
+
+## Mikrofon
+
+PortAudio pokazuje każde urządzenie raz na host API (MME, DirectSound, WASAPI, WDM-KS), więc wybór po nazwie był niejednoznaczny. Lista pokazuje tylko MME (zwykle przyjmuje 16 kHz mono; MME obcina nazwy do 31 znaków — etykieta jest uzupełniana nazwą z DirectSound). Zapamiętywana jest para nazwa + host API. Gdy 16 kHz jest odrzucone, nagranie idzie w częstotliwości natywnej i jest resamplowane (filtr okienkowany sinc + interpolacja). Flagi statusu callbacku (overflow) są logowane, a nagranie zostaje zachowane.
+
+## Rozpoznawanie i tłumaczenie
+
+- [faster-whisper](https://github.com/SYSTRAN/faster-whisper) / CTranslate2: CUDA 12 + cuDNN 9. Biblioteki z kół PyPI `nvidia-cublas-cu12` i `nvidia-cudnn-cu12`; katalogi `nvidia/*/bin` trafiają do `os.add_dll_directory` i `PATH` przed załadowaniem modelu (także w EXE). Rozgrzewka przy ładowaniu ujawnia błędy bibliotek od razu. Brak cichego przejścia na CPU i brak przeładowywania modelu w trakcie dekodowania. Działanie na RTX 5070 Ti potwierdzone pomiarem ([raport](TEST-REPORT.md)).
+- Modele pobierane są do zwykłych folderów (`local_dir`), bo cache Hugging Face z symlinkami kończy się `WinError 1314` na Windows bez trybu dewelopera.
+- Warianty: **A** `direct` (Whisper translate), **B** `two-stage` (Whisper transcribe PL + [Marian opus-mt-pl-en](https://huggingface.co/Helsinki-NLP/opus-mt-pl-en) na CPU), `polish` (sama transkrypcja). Na nagraniach z A50 wariant B zachował sens wszystkich zdań; A gubił fragmenty — B jest domyślny.
+- Prompty: polska lista terminów dla transkrypcji pomaga i nie przecieka do wyniku; angielska lista lub przykładowe zdanie dla `translate` były kopiowane do wyniku, więc `translate` ma neutralny prompt. Słownik użytkownika (tory, zakręty, nicki) jest dopisywany na początku promptu (Whisper zachowuje ok. 220 tokenów od końca). W pomiarach nazwy ze słownika nie były doklejane.
+- Filtr halucynacji: typowe wyniki z ciszy (napisy, Amara.org, „Thank you for watching”, „Dziękuję za uwagę”, sam „you”/„bye”/„Thank you”), pętle dekodowania i echo promptu. Reguła segmentów odpowiada regule ciszy Whispera (wysokie `no_speech_prob` **i** niskie `avg_logprob`) — sam próg `avg_logprob > -1.0` odrzucał prawdziwe krótkie „Sorry!”. Kompromis: samo „Dzięki.”/„Thank you.” jest odrzucane — powiedz np. „Dzięki za wyścig”.
+
+## Inne źródła
+
+- [Crew Chief](https://mr_belowski.gitlab.io/CrewChiefV4/VoiceRecognition_FreeDictationChatMessages.html) — idea sekwencji czatu.
+- [iRacing: makra i komendy czatu](https://support.iracing.com/support/solutions/articles/31000170165-pit-macros-chat-commands) — prefiksy `/ @ #` uruchamiają funkcje gry, dlatego są blokowane.
+- [SimHub Keyboard Emulator](https://github.com/SHWotever/SimHub/wiki/Additional-Plugin--Keyboard-Emulator-Plugin) — mapowanie przycisku na F13–F20 (iRacing ich nie używa); PTT wymaga zdarzeń key-down i key-up.
+- [ChatShift](https://github.com/toffenloffen/ChatShift), [STTC-EVO](https://github.com/chopsuey2/sttc-evo) — przejrzane wcześniej; nie wykorzystano kodu (licencje opisane w historii repozytorium).
 
 ## Licencje zależności
 
-Własny kod: MIT. faster-whisper/CTranslate2: MIT; Whisper: MIT; SDL/pygame-ce: zlib/LGPL (sprawdź notices konkretnego wydania); pynput/pystray: LGPL; sounddevice: MIT; NumPy: BSD; Pillow: HPND; psutil: BSD; Transformers: Apache-2.0; PyTorch: BSD. Model Marian ma własną kartę/licencję: https://huggingface.co/Helsinki-NLP/opus-mt-pl-en. Dystrybucja EXE musi zachować pliki licencyjne bibliotek (PyInstaller zbiera metadane w skrypcie budowania). Modele nie są dołączane do repozytorium.
+Własny kod: MIT. faster-whisper/CTranslate2: MIT; Whisper: MIT; SDL/pygame-ce: zlib/LGPL; pynput/pystray: LGPL; sounddevice: MIT; NumPy: BSD; Pillow: HPND; psutil: BSD; Transformers: Apache-2.0; PyTorch: BSD. `nvidia-cublas-cu12`, `nvidia-cudnn-cu12`: własna licencja NVIDIA (tekst w metadanych pakietów; warunki redystrybucji w EXE trzeba sprawdzić przed publikacją paczki — nie zostało to tu zweryfikowane). Model Marian ma własną kartę/licencję. Dystrybucja EXE musi zachować pliki licencyjne bibliotek. Modele nie są dołączane do repozytorium.
