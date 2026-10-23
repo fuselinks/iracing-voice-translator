@@ -8,7 +8,7 @@ Lokalnie: przycisk na kierownicy → polska mowa → angielski tekst → czat iR
 
 1. Python 3.12 x64 z python.org (z Tk i opcją PATH).
 2. `Install.cmd` (instaluje też biblioteki CUDA: `nvidia-cublas-cu12`, `nvidia-cudnn-cu12` — ok. 1 GB, osobna instalacja CUDA Toolkit nie jest potrzebna), potem `Start.cmd`.
-3. Zakładka **Start** → „Pobierz + załaduj model”. Potem wystarczy „Załaduj offline”.
+3. Zakładka **Start** → „Pobierz + załaduj model”. Przy kolejnych uruchomieniach pobrany model ładuje się sam.
 
 ## Okno
 

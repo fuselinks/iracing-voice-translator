@@ -322,6 +322,14 @@ class App:
     def load(self, download):
         if self.busy or self.recording or not self.save():
             return
+        self.start_load(download)
+
+    def autoload(self):
+        """Load the already downloaded model at startup; a missing model only shows the usual hint."""
+        if not (self.busy or self.recording or self.engine.model):
+            self.start_load(False)
+
+    def start_load(self, download):
         self.busy = True
         self.set_state('loading', 'Pobieranie modelu…' if download else 'Ładowanie z dysku…')
         def job():
@@ -641,7 +649,8 @@ def main():
     root.report_callback_exception = lambda typ, value, tb: (log.error('Tk callback', exc_info=(typ, value, tb)),
                                                               messagebox.showerror('Błąd', str(value)))
     try:
-        App(root)
+        app = App(root)
+        root.after(300, app.autoload)
         root.mainloop()
     finally:
         kernel.CloseHandle.argtypes = [wintypes.HANDLE]

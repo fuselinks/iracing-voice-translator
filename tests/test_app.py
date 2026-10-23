@@ -66,6 +66,11 @@ class AppTests(unittest.TestCase):
         self.assertEqual(self.app.config.vocabulary,'Eau Rouge, Raidillon');self.assertEqual(self.app.config.hotkey,'f17')
         self.mocks[3].assert_called_once_with(True)
         self.assertIs(self.app.sender.config,self.app.config)
+    def test_autoload_offline_without_saving(self):
+        self.app.engine.load=Mock();self.app.worker=lambda job:job()
+        self.app.autoload()
+        self.app.engine.load.assert_called_once_with(False);self.mocks[1].assert_not_called()
+        self.app.busy=True;self.app.autoload();self.app.engine.load.assert_called_once()
     def test_hotkey_edges(self):
         self.app.config.hotkey='f13';self.app.start=Mock();self.app.stop=Mock()
         self.app.events.put(('key',('f13',True)));self.app.events.put(('key',('f13',False)))
