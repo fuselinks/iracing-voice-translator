@@ -65,17 +65,17 @@ def model_folder(target, download, fetch, legacy):
     marker = target / '.ivt-complete'
     if marker.exists():
         return str(target)
-    if download:
-        try:
-            fetch(str(target))
-        except Exception as exc:
-            raise RuntimeError(f'Pobieranie modelu nie powiodło się ({target.name}): {exc}') from exc
-        marker.write_text('ok', encoding='utf-8')
-        return str(target)
     try:
-        return legacy()  # symlinked Hugging Face cache used by earlier versions
+        return legacy()  # Hugging Face cache used by earlier versions: never download a model that is already here
     except Exception as exc:
-        raise RuntimeError(f'Model {target.name} nie jest pobrany — użyj „Pobierz + załaduj model”') from exc
+        if not download:
+            raise RuntimeError(f'Model {target.name} nie jest pobrany — użyj „Pobierz + załaduj model”') from exc
+    try:
+        fetch(str(target))
+    except Exception as exc:
+        raise RuntimeError(f'Pobieranie modelu nie powiodło się ({target.name}): {exc}') from exc
+    marker.write_text('ok', encoding='utf-8')
+    return str(target)
 
 class Engine:
     def __init__(self, config):

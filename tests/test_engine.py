@@ -77,6 +77,7 @@ class EngineTests(unittest.TestCase):
             self.assertEqual(model_folder(target,True,fetch,legacy),str(target))
             self.assertEqual(model_folder(target,False,fetch,legacy),str(target));self.assertEqual(len(fetched),1)
             self.assertEqual(model_folder(Path(folder)/'old',False,fetch,lambda:'cache-path'),'cache-path')
+            self.assertEqual(model_folder(Path(folder)/'old',True,fetch,lambda:'cache-path'),'cache-path');self.assertEqual(len(fetched),1)
             def symlink_error(path):raise OSError('[WinError 1314] symlink')
             with self.assertRaisesRegex(RuntimeError,'Pobieranie modelu'):model_folder(Path(folder)/'x',True,symlink_error,legacy)
     def test_low_confidence(self):

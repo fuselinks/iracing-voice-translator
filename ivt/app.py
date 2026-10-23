@@ -283,7 +283,8 @@ class App:
 
     def save(self):
         if self.busy or self.recording:
-            self.set_state('error', 'Najpierw zakończ bieżącą operację')
+            # Keep the current state visible (e.g. "Pobieranie modelu…") instead of masking it with an error.
+            self.set_state(self.state, 'Poczekaj — trwa ' + ('nagrywanie' if self.recording else 'poprzednia operacja'))
             return False
         new = replace(self.config)
         try:
